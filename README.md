@@ -26,7 +26,7 @@ Plateforme web de collecte hebdomadaire des « échos » de la zone sanitaire : 
 - **iPhone / iPad (Safari)** : bouton Partager → **Sur l'écran d'accueil**.
 - L'installation exige l'adresse HTTPS de GitHub Pages ; elle ne fonctionne pas en ouvrant le fichier directement.
 - Hors connexion, l'interface s'ouvre mais l'enregistrement et la lecture des contributions demandent internet.
-- Après une mise à jour de `index.html`, changez `echos-v1` en `echos-v2` dans `sw.js` pour forcer le rafraîchissement.
+- Après une mise à jour de `index.html`, changez le numéro de version (ex. `echos-v2` en `echos-v3`) dans `sw.js` pour forcer le rafraîchissement.
 
 ## Firebase (base de données partagée)
 

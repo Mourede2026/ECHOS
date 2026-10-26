@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ECHOS – Zone Sanitaire DAA</title>
 <meta name="theme-color" content="#155C4F">
 <meta name="description" content="Collecte hebdomadaire des échos de la zone sanitaire DAA">
@@ -32,6 +32,7 @@
     --shadow:0 1px 2px rgba(19,42,37,.06), 0 6px 20px -8px rgba(19,42,37,.15);
   }
   *{box-sizing:border-box;}
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; } /* évite le zoom du texte à la rotation (iOS) */
   html,body{margin:0;padding:0;}
   body{
     background:var(--bg);
@@ -160,6 +161,19 @@
     nav.tabs{ position:sticky; top:0; overflow-x:auto; flex-wrap:nowrap; }
     nav.tabs button{ white-space:nowrap; }
     table.report{ display:block; overflow-x:auto; }
+  }
+
+  /* ---------- rotation : portrait / paysage (tablette, web) ---------- */
+  /* encoches et barres système en paysage */
+  #app{ padding-left:max(20px, env(safe-area-inset-left)); padding-right:max(20px, env(safe-area-inset-right)); }
+  @media (max-width:640px){ #app{ padding-left:max(12px, env(safe-area-inset-left)); padding-right:max(12px, env(safe-area-inset-right)); } }
+  /* grands écrans / tablettes en paysage : plus de largeur utile */
+  @media (min-width:900px){ #app{ max-width:1280px; } }
+  /* paysage à faible hauteur : l'en-tête collant ne mange plus l'écran */
+  @media (orientation:landscape) and (max-height:520px){
+    header.topbar{ position:static; padding:10px 4px; }
+    nav.tabs{ position:static; margin:12px 0 14px; }
+    #setupScreen{ margin:20px auto; }
   }
   @media (display-mode: standalone){ footer.note{ padding-bottom:env(safe-area-inset-bottom); } }
 </style>
