@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Stockage clé/valeur de l'application ECHOS (contributions + calendriers)
+    match /echos_kv/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['value', 'updatedAt'])
+                            && request.resource.data.value is string
+                            && request.resource.data.value.size() < 100000;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECHOS – Zone Sanitaire DAA</title>
+<meta name="theme-color" content="#155C4F">
+<meta name="description" content="Collecte hebdomadaire des échos de la zone sanitaire DAA">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ECHOS DAA">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#F6F4EE;
+    --surface:#FFFFFF;
+    --ink:#132A25;
+    --muted:#66766F;
+    --primary:#155C4F;
+    --primary-dark:#0D4038;
+    --primary-tint:#E4EFEC;
+    --accent:#D79A2A;
+    --accent-tint:#FBF0DA;
+    --red:#B23A2E;
+    --red-tint:#F7E7E4;
+    --border:#DFE4DF;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(19,42,37,.06), 0 6px 20px -8px rgba(19,42,37,.15);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.5;
+  }
+  h1,h2,h3,.serif{ font-family:Georgia,"Times New Roman",serif; }
+  #app{ max-width:1080px; margin:0 auto; padding:0 20px 60px; }
+
+  /* ---------- header ---------- */
+  header.topbar{
+    display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;
+    padding:22px 4px 18px; border-bottom:3px solid var(--primary);
+    position:sticky; top:0; background:var(--bg); z-index:20;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    background:var(--primary); color:#fff; font-weight:700; letter-spacing:.06em;
+    padding:8px 12px; border-radius:8px; font-size:15px;
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .brand-text h1{ margin:0; font-size:19px; }
+  .brand-text .sub{ margin:0; font-size:12.5px; color:var(--muted); }
+
+  .week-picker{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; }
+  .week-picker label{ color:var(--muted); }
+  .week-picker select{
+    font:inherit; padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:#fff;
+  }
+  .week-range{
+    background:var(--primary-tint); color:var(--primary-dark); padding:6px 10px; border-radius:20px;
+    font-weight:600; font-size:12.5px; white-space:nowrap;
+  }
+
+  /* ---------- tabs ---------- */
+  nav.tabs{ display:flex; gap:6px; margin:18px 0 22px; flex-wrap:wrap; }
+  nav.tabs button{
+    font:inherit; font-size:13.5px; font-weight:600; padding:10px 16px; border-radius:999px;
+    border:1px solid var(--border); background:#fff; color:var(--ink); cursor:pointer;
+  }
+  nav.tabs button.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
+  nav.tabs button:hover:not(.active){ border-color:var(--primary); }
+
+  /* ---------- generic ---------- */
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
+  .hint{ color:var(--muted); font-size:13px; margin:4px 0 16px; }
+  .grid-cards{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; margin-bottom:22px; }
+  .card{
+    text-align:left; cursor:pointer; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius);
+    padding:14px 14px 12px; display:flex; flex-direction:column; gap:6px; transition:.15s border-color, .15s transform;
+  }
+  .card:hover{ border-color:var(--primary); transform:translateY(-1px); }
+  .card.selected{ border-color:var(--primary); background:var(--primary-tint); }
+  .card .role{ font-size:11px; font-weight:700; letter-spacing:.05em; color:var(--primary-dark); text-transform:uppercase; }
+  .card .label{ font-size:14px; font-weight:600; }
+  .status-row{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:2px; }
+  .dot{ width:9px; height:9px; border-radius:50%; background:#C9CFC9; flex:0 0 auto; }
+  .dot.filled{ background:var(--primary); }
+  .dot.loading{ background:var(--accent); }
+
+  form .field{ margin-bottom:16px; }
+  form label.f-label{ display:block; font-weight:600; font-size:13.5px; margin-bottom:6px; }
+  textarea, input[type=text], input[type=date], input[type=number]{
+    font:inherit; width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:#fff; color:var(--ink);
+  }
+  textarea{ min-height:110px; resize:vertical; font-size:13.5px; }
+  .file-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+  .file-row input[type=file]{ font-size:12.5px; }
+  .btn{
+    font:inherit; font-weight:700; font-size:13.5px; padding:10px 18px; border-radius:8px; border:none; cursor:pointer;
+    background:var(--primary); color:#fff;
+  }
+  .btn:hover{ background:var(--primary-dark); }
+  .btn.secondary{ background:#fff; color:var(--primary); border:1.5px solid var(--primary); }
+  .btn.secondary:hover{ background:var(--primary-tint); }
+  .btn.small{ padding:6px 12px; font-size:12.5px; }
+  .toast{
+    margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px; font-weight:600;
+    background:var(--primary-tint); color:var(--primary-dark); display:none;
+  }
+  .toast.show{ display:block; }
+  .muted{ color:var(--muted); font-size:12.5px; }
+
+  /* ---------- report ---------- */
+  .report-title{ display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  table.report{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.report th, table.report td{ border:1px solid var(--border); padding:10px 12px; vertical-align:top; text-align:left; }
+  table.report th{ background:var(--primary); color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  table.report td.domain{ font-weight:700; background:var(--primary-tint); width:19%; }
+  table.report td.empty{ color:var(--muted); font-style:italic; }
+  table.report td .meta{ display:block; margin-top:8px; font-size:11px; color:var(--muted); font-style:normal; }
+  .subhead{ margin:26px 0 10px; font-size:15px; }
+  .actions-row{ display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+  pre.wa{ white-space:pre-wrap; background:#0D4038; color:#EAF3F0; padding:16px; border-radius:10px; font-size:12.5px; max-height:340px; overflow:auto; }
+
+  /* ---------- admin ---------- */
+  .admin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:640px){ .admin-grid{ grid-template-columns:1fr; } }
+  table.years{ width:100%; border-collapse:collapse; font-size:13px; margin-top:14px;}
+  table.years th, table.years td{ border-bottom:1px solid var(--border); padding:8px 6px; text-align:left; }
+
+  footer.note{ margin-top:34px; color:var(--muted); font-size:11.5px; text-align:center; }
+
+  /* ---------- setup screen ---------- */
+  #setupScreen{ max-width:640px; margin:60px auto; }
+  #setupScreen ol{ padding-left:20px; }
+  #setupScreen li{ margin-bottom:10px; font-size:14px; }
+  #setupScreen code{ background:var(--primary-tint); padding:2px 6px; border-radius:4px; font-size:12.5px; }
+  #setupScreen pre{ background:#0D4038; color:#EAF3F0; padding:14px; border-radius:8px; font-size:12px; overflow:auto; }
+  #setupScreen .field{ margin-bottom:10px; }
+  #setupScreen input{ font-size:13px; }
+
+  /* ---------- icons & install ---------- */
+  .ico{ width:1.15em; height:1.15em; flex:0 0 auto; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-.2em; }
+  nav.tabs button{ display:inline-flex; align-items:center; gap:7px; }
+  .card .role{ display:flex; align-items:center; gap:6px; }
+  .card .role .ico{ width:16px; height:16px; color:var(--accent); }
+  .panel h3 .ico{ color:var(--primary); margin-right:4px; }
+  .install-btn{ display:none; align-items:center; gap:6px; }
+  .install-btn.show{ display:inline-flex; }
+  .brand-mark img{ display:block; width:34px; height:34px; border-radius:8px; }
+  @media (max-width:640px){
+    #app{ padding:0 12px 50px; }
+    header.topbar{ padding:14px 2px 12px; }
+    nav.tabs{ position:sticky; top:0; overflow-x:auto; flex-wrap:nowrap; }
+    nav.tabs button{ white-space:nowrap; }
+    table.report{ display:block; overflow-x:auto; }
+  }
+  @media (display-mode: standalone){ footer.note{ padding-bottom:env(safe-area-inset-bottom); } }
+</style>
+</head>
+<body>
+
+<div id="setupScreen" style="display:none">
+  <div class="panel">
+    <h2 style="margin-top:0">Configuration requise (une seule fois)</h2>
+    <p class="hint">Cet outil est hébergé en dehors de Claude (GitHub / fichier statique), il a donc besoin d'une petite base de données gratuite pour que les 9 secteurs partagent leurs données. Firebase (Google) fait ça très bien et gratuitement. À faire une seule fois, par toi seul — les 9 contributeurs n'auront besoin d'aucun compte.</p>
+    <ol>
+      <li>Va sur <code>console.firebase.google.com</code>, connecte-toi avec un compte Google, clique <b>"Ajouter un projet"</b> et donne-lui un nom (ex: <code>echos-zs-daa</code>). Désactive Google Analytics si proposé (pas nécessaire).</li>
+      <li>Dans le menu de gauche du projet, ouvre <b>Build → Firestore Database</b>, clique <b>"Créer une base de données"</b>, choisis une région proche, puis <b>"Mode production"</b>.</li>
+      <li>Une fois créée, va dans l'onglet <b>"Règles"</b> de Firestore et remplace le contenu par :
+        <pre>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /echos_kv/{doc} {
+      allow read, write: if true;
+    }
+  }
+}</pre>
+        puis clique <b>Publier</b>. (Cela rend les données ouvertes à quiconque a le lien — cohérent avec le principe "pas de compte" ; ne mets pas d'informations confidentielles sensibles.)
+      </li>
+      <li>Retourne à la racine du projet (icône ⚙️ → <b>Paramètres du projet</b>), descends à <b>"Vos applications"</b>, clique l'icône <b>&lt;/&gt; (Web)</b>, donne un surnom, clique <b>"Enregistrer l'application"</b>. Firebase affiche un bloc <code>firebaseConfig = {'{'} apiKey: ..., projectId: ... {'}'}</code> : copie ces 6 valeurs ci-dessous.</li>
+    </ol>
+    <form id="setupForm">
+      <div class="field"><label class="f-label">apiKey</label><input type="text" id="cfg_apiKey" required=""></div>
+      <div class="field"><label class="f-label">authDomain</label><input type="text" id="cfg_authDomain" required=""></div>
+      <div class="field"><label class="f-label">projectId</label><input type="text" id="cfg_projectId" required=""></div>
+      <div class="field"><label class="f-label">storageBucket</label><input type="text" id="cfg_storageBucket"></div>
+      <div class="field"><label class="f-label">messagingSenderId</label><input type="text" id="cfg_messagingSenderId"></div>
+      <div class="field"><label class="f-label">appId</label><input type="text" id="cfg_appId" required=""></div>
+      <hr style="margin:18px 0;border:none;border-top:1px solid var(--border)">
+      <div class="field">
+        <label class="f-label">Code d'accès administrateur (à choisir toi-même)</label>
+        <input type="text" id="cfg_adminCode" placeholder="Ex: DAA2026" required="">
+        <p class="muted" style="margin-top:4px">Ce code protègera l'onglet "Calendrier (Admin)". Retiens-le : lui seul permettra d'y accéder ensuite. Il ne sera jamais demandé aux 9 contributeurs.</p>
+      </div>
+      <button type="submit" class="btn">Enregistrer et démarrer</button>
+    </form>
+    <p class="muted" style="margin-top:14px">Cette configuration est enregistrée directement dans le fichier HTML sur ton ordinateur (bouton ci-dessous) — tu n'auras à le faire qu'une seule fois, avant de mettre le fichier en ligne sur GitHub Pages.</p>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><img src="icons/icon-192.png" alt="ECHOS"></div>
+      <div class="brand-text">
+        <h1>Plateforme de collecte ECHOS</h1>
+        <p class="sub">Centre de Surveillance Épidémiologique — Zone Sanitaire DAA</p>
+      </div>
+    </div>
+    <div class="week-picker">
+      <label for="yearSelect">Année</label>
+      <select id="yearSelect"></select>
+      <label for="weekSelect">Semaine</label>
+      <select id="weekSelect"></select>
+      <span class="week-range" id="weekRangeLabel">—</span>
+      <button type="button" class="btn small install-btn" id="btnInstall"></button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="submit"><svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Déposer ma contribution</button>
+    <button class="tab" data-tab="report"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h8"/></svg>Rapport compilé</button>
+    <button class="tab" data-tab="admin"><svg class="ico" viewBox="0 0 24 24"><path d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18"/></svg>Calendrier (Admin)</button>
+  </nav>
+
+  <main id="content"></main>
+
+  <footer class="note">Les données saisies ici sont partagées entre tous les acteurs ayant accès à ce lien. Toute personne disposant du lien peut voir et modifier une contribution.</footer>
+</div>
+
+<script>
+/* Capture the pristine page source BEFORE any DOM mutation, so the setup
+   form can produce a ready-to-deploy file with the Firebase config baked in. */
+const ORIGINAL_HTML = '<' + '!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+/* =========================================================
+   FIREBASE CONFIG — replace these 6 values (see setup screen),
+   or fill the setup form once and download the generated file.
+========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCgZw1aIV0_cUJZAYk-PC2YXCoh0Txcxk",
+  authDomain: "echos-hebdomadaires-zs-daa.firebaseapp.com",
+  projectId: "echos-hebdomadaires-zs-daa",
+  storageBucket: "echos-hebdomadaires-zs-daa.firebasestorage.app",
+  messagingSenderId: "460455922687",
+  appId: "1:460455922687:web:dd1d5eb61c33a6bbc535ca"
+};
+let ADMIN_CODE = "Silo@2000";
+let adminUnlocked = false;
+let db = null;
+function isConfigured(cfg){ return cfg.apiKey && !String(cfg.apiKey).startsWith('__') && ADMIN_CODE && !ADMIN_CODE.startsWith('__'); }
+function startFirebase(cfg){
+  if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(cfg);
+  db = firebase.firestore();
+}
+
+/* =========================================================
+   CONFIG
+========================================================= */
+const SECTIONS = [
+  { key:'epidemio',         role:'RCSE',    label:'Épidémiologie et catastrophe sanitaire',                         type:'situation_reco',
+    hint:'Décès, cas suspects/confirmés de maladies à potentiel épidémique, événements de santé publique...' },
+  { key:'ressources_mat',   role:'CAR',     label:'Ressources matérielles, Financières et infrastructures',         type:'situation_reco',
+    hint:'État des équipements, travaux, financements, infrastructures...' },
+  { key:'ressources_hum',   role:'RH',      label:'Ressources humaines',                                            type:'situation_reco',
+    hint:'Mouvements de personnel, absences, besoins en effectifs...' },
+  { key:'clientele_privee', role:'RSI',     label:'Exercice en clientèle privée',                                   type:'situation_reco',
+    hint:'Suivi des structures et praticiens privés de la zone sanitaire...' },
+  { key:'arch',             role:'PF ARCH', label:'Mise en œuvre du projet ARCH',                                   type:'situation_reco',
+    hint:'Avancement des activités du projet ARCH...' },
+  { key:'cogestion',        role:'RSI',     label:'Cogestion des structures sanitaires',                            type:'situation_reco',
+    hint:'Points liés à la cogestion des formations sanitaires...' },
+  { key:'etme_vih',         role:'RSO',     label:'Autres : Activités ETME et PEC du VIH',                          type:'situation_reco',
+    hint:'Gestantes, accouchements, PCR, sérologies, dépistages...' },
+  { key:'point_srcr',       role:'PF SRCR', label:'Point SRCR',                                                     type:'situation_reco',
+    hint:'Références, contre-références, ambulance, distances, dépenses...' },
+  { key:'intrants',         role:'GDR',     label:'Point de disponibilité des intrants',                           type:'table',
+    hint:'Une ligne par produit : Produit | Stock de sécurité | Stock disponible | Taux de disponibilité | Appréciation' },
+];
+
+const ICON_PATHS = {
+  epidemio:'M22 12h-4l-3 9L9 3l-3 9H2',
+  ressources_mat:'M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6',
+  ressources_hum:'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  clientele_privee:'M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+  arch:'M4 21V4M4 4h13l-2 4 2 4H4',
+  cogestion:'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1',
+  etme_vih:'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z',
+  point_srcr:'M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5M18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5',
+  intrants:'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8'
+};
+function ico(key){ const p = ICON_PATHS[key]; return p ? `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${p}"/></svg>` : ''; }
+
+const DEFAULT_CALENDAR ={ year:2026, startDate:'2025-12-29', weeks:52 };
+const STATE = { year:null, week:null, calendars:{}, tab:'submit', selectedSection:null };
+
+/* =========================================================
+   UTILITIES
+========================================================= */
+function pad(n){ return String(n).padStart(2,'0'); }
+function addDays(dateStr, days){
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function fmtDate(d){ return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; }
+function isoDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function weekInfo(cal, n){
+  const start = addDays(cal.startDate, (n-1)*7);
+  const end = addDays(cal.startDate, (n-1)*7 + 6);
+  return { n, start, end, label:`S${pad(n)}  (${fmtDate(start)} – ${fmtDate(end)})` };
+}
+function entryKey(year, week, sectionKey){ return `echos:${year}-S${pad(week)}:${sectionKey}`; }
+
+/* Firestore-backed key/value storage — mirrors the shape of the previous
+   window.storage helpers so the rest of the app is unchanged. Every key is
+   stored as a document in a single "echos_kv" collection (document id = key). */
+async function safeGet(key){
+  try{
+    const doc = await db.collection('echos_kv').doc(key.replace(/\//g,'_')).get();
+    return doc.exists ? doc.data().value : null;
+  }catch(e){ console.error('get failed', e); return null; }
+}
+async function safeSet(key, value){
+  try{
+    await db.collection('echos_kv').doc(key.replace(/\//g,'_')).set({ value, updatedAt: Date.now() });
+    return true;
+  }catch(e){ console.error('set failed', e); return null; }
+}
+async function safeList(prefix){
+  try{
+    const end = prefix + '\uf8ff';
+    const snap = await db.collection('echos_kv')
+      .where(firebase.firestore.FieldPath.documentId(), '>=', prefix)
+      .where(firebase.firestore.FieldPath.documentId(), '<', end)
+      .get();
+    return snap.docs.map(d => d.id);
+  }catch(e){ console.error('list failed', e); return []; }
+}
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function nl2br(s){ return escapeHtml(s).replace(/\n/g,'<br>'); }
+
+/* dynamic script loader for file-import libraries */
+function loadScript(src){
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('load failed: ' + src));
+    document.head.appendChild(s);
+  });
+}
+const ensureMammoth = () => loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
+const ensureXLSX = () => loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+const ensureHtmlDocx = () => loadScript('https://unpkg.com/html-docx-js/dist/html-docx.js');
+
+/* Admin-code gate — used to restrict sensitive actions (sending the Word
+   report, editing the calendar) to the person who knows ADMIN_CODE. */
+function requireAdminCode(action){
+  const already = adminUnlocked || sessionStorage.getItem('echos_admin_unlocked') === '1';
+  if (already){ action(); return; }
+  const code = window.prompt('Action réservée à l\'administrateur.\nSaisissez le code d\'accès :');
+  if (code === null) return;
+  if (code.trim() === ADMIN_CODE){
+    adminUnlocked = true;
+    sessionStorage.setItem('echos_admin_unlocked', '1');
+    action();
+  } else {
+    alert('Code incorrect.');
+  }
+}
+
+async function extractFileText(file){
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (['txt','csv'].includes(ext)){
+    return await file.text();
+  }
+  if (ext === 'docx'){
+    await ensureMammoth();
+    const buf = await file.arrayBuffer();
+    const res = await mammoth.extractRawText({ arrayBuffer: buf });
+    return res.value.trim();
+  }
+  if (['xlsx','xls'].includes(ext)){
+    await ensureXLSX();
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array' });
+    const parts = [];
+    wb.SheetNames.forEach(name => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:false, blankrows:false });
+      const lines = rows
+        .filter(r => r.some(c => String(c||'').trim() !== ''))
+        .map(r => r.map(c => String(c==null?'':c).trim()).join(' | '));
+      if (lines.length) parts.push(lines.join('\n'));
+    });
+    return parts.join('\n');
+  }
+  throw new Error('unsupported');
+}
+
+/* =========================================================
+   CALENDAR DATA
+========================================================= */
+async function loadCalendars(){
+  const keys = await safeList('calendar:', true);
+  let years = keys.map(k => k.split(':')[1]).filter(Boolean);
+  if (years.length === 0){
+    await safeSet('calendar:2026', JSON.stringify(DEFAULT_CALENDAR), true);
+    years = ['2026'];
+  }
+  const cals = {};
+  for (const y of years){
+    const raw = await safeGet('calendar:' + y, true);
+    if (raw) cals[y] = JSON.parse(raw);
+  }
+  return cals;
+}
+function currentWeekGuess(cal){
+  const today = new Date();
+  const todayIso = isoDate(today);
+  for (let n=1; n<=cal.weeks; n++){
+    const wi = weekInfo(cal, n);
+    if (isoDate(wi.start) <= todayIso && todayIso <= isoDate(wi.end)) return n;
+  }
+  return 1;
+}
+
+/* =========================================================
+   TOP BAR (year / week pickers)
+========================================================= */
+function populateYearSelect(){
+  const sel = document.getElementById('yearSelect');
+  const years = Object.keys(STATE.calendars).sort();
+  sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  sel.value = STATE.year;
+}
+function populateWeekSelect(){
+  const sel = document.getElementById('weekSelect');
+  const cal = STATE.calendars[STATE.year];
+  if (!cal){ sel.innerHTML = ''; return; }
+  let opts = '';
+  for (let n=1; n<=cal.weeks; n++){
+    opts += `<option value="${n}">${weekInfo(cal,n).label}</option>`;
+  }
+  sel.innerHTML = opts;
+  sel.value = STATE.week;
+  updateWeekRangeLabel();
+}
+function updateWeekRangeLabel(){
+  const cal = STATE.calendars[STATE.year];
+  if (!cal) return;
+  const wi = weekInfo(cal, STATE.week);
+  document.getElementById('weekRangeLabel').textContent = `${fmtDate(wi.start)} – ${fmtDate(wi.end)}`;
+}
+
+/* =========================================================
+   TABS
+========================================================= */
+function setTab(tab){
+  STATE.tab = tab;
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  render();
+}
+
+function render(){
+  const content = document.getElementById('content');
+  if (STATE.tab === 'submit') renderSubmitTab(content);
+  else if (STATE.tab === 'report') renderReportTab(content);
+  else renderAdminTab(content);
+}
+
+/* =========================================================
+   SUBMIT TAB
+========================================================= */
+async function renderSubmitTab(content){
+  content.innerHTML = `
+    <p class="hint">Choisissez votre secteur ci-dessous, puis renseignez vos informations ou importez un fichier
+    (Word, Excel, CSV ou texte). Vous pouvez revenir modifier votre contribution tant que le rapport n'est pas envoyé.</p>
+    <div class="grid-cards" id="cardsGrid">
+      ${SECTIONS.map(s => `
+        <button type="button" class="card" data-key="${s.key}">
+          <span class="role">${ico(s.key)}${s.role}</span>
+          <span class="label">${s.label}</span>
+          <span class="status-row"><span class="dot loading" id="dot-${s.key}"></span><span id="dotlabel-${s.key}">Chargement…</span></span>
+        </button>`).join('')}
+    </div>
+    <div id="formHost"></div>
+  `;
+
+  document.querySelectorAll('#cardsGrid .card').forEach(card => {
+    card.addEventListener('click', () => {
+      STATE.selectedSection = card.dataset.key;
+      document.querySelectorAll('#cardsGrid .card').forEach(c => c.classList.toggle('selected', c === card));
+      renderSectionForm();
+    });
+  });
+
+  refreshStatusDots();
+  if (STATE.selectedSection){
+    const card = document.querySelector(`#cardsGrid .card[data-key="${STATE.selectedSection}"]`);
+    if (card) card.classList.add('selected');
+    renderSectionForm();
+  }
+}
+
+async function refreshStatusDots(){
+  for (const s of SECTIONS){
+    const raw = await safeGet(entryKey(STATE.year, STATE.week, s.key), true);
+    const dot = document.getElementById('dot-' + s.key);
+    const label = document.getElementById('dotlabel-' + s.key);
+    if (!dot) continue;
+    if (raw){
+      dot.classList.remove('loading'); dot.classList.add('filled');
+      const data = JSON.parse(raw);
+      label.textContent = data.updatedBy ? `Soumis · ${data.updatedBy}` : 'Soumis';
+    } else {
+      dot.classList.remove('loading','filled');
+      label.textContent = 'En attente';
+    }
+  }
+}
+
+async function renderSectionForm(){
+  const host = document.getElementById('formHost');
+  const s = SECTIONS.find(x => x.key === STATE.selectedSection);
+  host.innerHTML = `<div class="panel"><p class="muted">Chargement de la contribution existante…</p></div>`;
+  const raw = await safeGet(entryKey(STATE.year, STATE.week, s.key), true);
+  const data = raw ? JSON.parse(raw) : {};
+
+  const fieldsHtml = s.type === 'table'
+    ? `<div class="field">
+         <label class="f-label">${s.label} — données</label>
+         <textarea id="f_rawText" placeholder="Une ligne par produit, ex: Ocytocine | 875 | 3964 | +4,53 fois | Disponible">${escapeHtml(data.rawText||'')}</textarea>
+       </div>`
+    : `<div class="field">
+         <label class="f-label">Situations / évènements</label>
+         <textarea id="f_situation" placeholder="Décrivez les faits, chiffres, événements de la semaine...">${escapeHtml(data.situation||'')}</textarea>
+       </div>
+       <div class="field">
+         <label class="f-label">Approches de solutions / Recommandations actuelles</label>
+         <textarea id="f_recommandation" placeholder="Actions prises ou recommandées (facultatif)...">${escapeHtml(data.recommandation||'')}</textarea>
+       </div>`;
+
+  host.innerHTML = `
+    <div class="panel">
+      <h3 style="margin-top:0">${ico(s.key)}${s.role} — ${s.label}</h3>
+      <p class="hint">${s.hint}</p>
+      <form id="sectionForm">
+        ${fieldsHtml}
+        <div class="field">
+          <label class="f-label">Importer un fichier (facultatif)</label>
+          <div class="file-row">
+            <input type="file" id="f_file" accept=".txt,.csv,.docx,.xlsx,.xls">
+            <span class="muted" id="importStatus"></span>
+          </div>
+          <p class="muted" style="margin-top:6px">Le contenu extrait est ajouté au champ ci-dessus — vous pourrez le corriger avant d'envoyer.</p>
+        </div>
+        <div class="field">
+          <label class="f-label">Votre nom (facultatif)</label>
+          <input type="text" id="f_who" value="${escapeHtml(data.updatedBy||'')}" placeholder="Ex: Dr AGOSSOU">
+        </div>
+        <button type="submit" class="btn">Enregistrer ma contribution</button>
+        <div class="toast" id="submitToast"></div>
+      </form>
+      ${data.updatedAt ? `<p class="muted" style="margin-top:12px">Dernière mise à jour : ${new Date(data.updatedAt).toLocaleString('fr-FR')}</p>` : ''}
+    </div>
+  `;
+
+  document.getElementById('f_file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('importStatus');
+    statusEl.textContent = 'Extraction en cours…';
+    try{
+      const text = await extractFileText(file);
+      const target = s.type === 'table' ? document.getElementById('f_rawText') : document.getElementById('f_situation');
+      target.value = (target.value ? target.value + '\n\n' : '') + text.trim();
+      statusEl.textContent = '✓ Contenu importé, vérifiez et complétez si besoin.';
+    }catch(err){
+      statusEl.textContent = "Format non pris en charge pour l'extraction automatique — copiez-collez le texte manuellement.";
+    }
+  });
+
+  document.getElementById('sectionForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      role: s.role, label: s.label,
+      updatedAt: new Date().toISOString(),
+      updatedBy: document.getElementById('f_who').value.trim(),
+    };
+    if (s.type === 'table') payload.rawText = document.getElementById('f_rawText').value;
+    else {
+      payload.situation = document.getElementById('f_situation').value;
+      payload.recommandation = document.getElementById('f_recommandation').value;
+    }
+    await safeSet(entryKey(STATE.year, STATE.week, s.key), JSON.stringify(payload), true);
+    const toast = document.getElementById('submitToast');
+    toast.textContent = '✓ Contribution enregistrée pour ' + weekInfo(STATE.calendars[STATE.year], STATE.week).label;
+    toast.classList.add('show');
+    refreshStatusDots();
+  });
+}
+
+/* =========================================================
+   REPORT TAB
+========================================================= */
+function parseTableRows(rawText){
+  const lines = (rawText||'').split('\n').map(l => l.trim()).filter(Boolean);
+  return lines.map(line => line.split(/\t|\|/).map(c => c.trim()));
+}
+
+async function renderReportTab(content){
+  const wi = weekInfo(STATE.calendars[STATE.year], STATE.week);
+  content.innerHTML = `<div class="panel"><p class="muted">Chargement du rapport…</p></div>`;
+
+  const entries = {};
+  for (const s of SECTIONS){
+    const raw = await safeGet(entryKey(STATE.year, STATE.week, s.key), true);
+    entries[s.key] = raw ? JSON.parse(raw) : null;
+  }
+
+  const mainSections = SECTIONS.filter(s => s.type === 'situation_reco');
+  const intrantsSection = SECTIONS.find(s => s.type === 'table');
+  const intrantsData = entries[intrantsSection.key];
+  const intrantsRows = intrantsData ? parseTableRows(intrantsData.rawText) : [];
+
+  const rowsHtml = mainSections.map(s => {
+    const d = entries[s.key];
+    const sit = d && d.situation ? nl2br(d.situation) : '';
+    const reco = d && d.recommandation ? nl2br(d.recommandation) : '';
+    const meta = d && d.updatedBy ? `<span class="meta">— ${escapeHtml(d.updatedBy)}, ${new Date(d.updatedAt).toLocaleDateString('fr-FR')}</span>` : '';
+    return `<tr>
+      <td class="domain">${s.label}</td>
+      <td class="${sit ? '' : 'empty'}">${sit || 'En attente de contribution (' + s.role + ')'}${sit ? meta : ''}</td>
+      <td class="${reco ? '' : 'empty'}">${reco || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const intrantsTableHtml = intrantsRows.length
+    ? `<table class="report"><thead><tr>
+         <th>Produit</th><th>Stock de sécurité</th><th>Stock disponible</th><th>Taux de disponibilité</th><th>Appréciation</th>
+       </tr></thead><tbody>
+         ${intrantsRows.map(r => `<tr>${[0,1,2,3,4].map(i => `<td>${escapeHtml(r[i]||'')}</td>`).join('')}</tr>`).join('')}
+       </tbody></table>`
+    : `<p class="muted">En attente de contribution (${intrantsSection.role}).</p>`;
+
+  content.innerHTML = `
+    <div class="panel">
+      <div class="report-title">
+        <div>
+          <h2 style="margin:0">Rapport ECHOS — ${wi.label}</h2>
+          <p class="muted" style="margin:4px 0 0">Zone Sanitaire DAA</p>
+        </div>
+        <div class="actions-row">
+          <button class="btn" id="btnSendWord">📄 Envoyer (Word) — Admin</button>
+          <button class="btn secondary small" id="btnCopy">Copier le texte</button>
+        </div>
+      </div>
+      <table class="report">
+        <thead><tr><th>Domaines / secteurs</th><th>Situations / évènements</th><th>Approches de solutions / Recommandations actuelles</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p class="muted" style="margin-top:8px">Le fichier Word généré est prêt à être envoyé tel quel en pièce jointe WhatsApp. Action réservée à l'administrateur (code demandé si nécessaire).</p>
+      <h3 class="subhead">${intrantsSection.label}</h3>
+      ${intrantsTableHtml}
+      <div id="waPreviewHost"></div>
+    </div>
+  `;
+
+  function buildWhatsAppText(){
+    let out = `*ECHOS – ${wi.label}*\n*Zone Sanitaire DAA*\n\n`;
+    mainSections.forEach(s => {
+      const d = entries[s.key];
+      out += `*${s.label}*\n`;
+      out += (d && d.situation ? d.situation.trim() : 'RAS') + '\n';
+      if (d && d.recommandation && d.recommandation.trim()){
+        out += `Recommandation : ${d.recommandation.trim()}\n`;
+      }
+      out += '\n';
+    });
+    out += `*${intrantsSection.label}*\n`;
+    if (intrantsRows.length){
+      intrantsRows.forEach(r => { out += `- ${r[0]||''} : sécurité ${r[1]||'-'}, disponible ${r[2]||'-'}, ${r[3]||'-'}, ${r[4]||'-'}\n`; });
+    } else out += 'RAS\n';
+    return out;
+  }
+
+  document.getElementById('btnCopy').addEventListener('click', async () => {
+    const text = buildWhatsAppText();
+    try{
+      await navigator.clipboard.writeText(text);
+      document.getElementById('btnCopy').textContent = '✓ Copié !';
+      setTimeout(() => document.getElementById('btnCopy').textContent = 'Copier le texte', 1800);
+    }catch(e){
+      document.getElementById('waPreviewHost').innerHTML = `<h3 class="subhead">Texte à copier manuellement</h3><pre class="wa">${escapeHtml(text)}</pre>`;
+    }
+  });
+
+  function buildWordHtml(){
+    const rowsForWord = mainSections.map(s => {
+      const d = entries[s.key];
+      const sit = d && d.situation ? nl2br(d.situation) : 'RAS';
+      const reco = d && d.recommandation && d.recommandation.trim() ? nl2br(d.recommandation) : 'RAS';
+      return `<tr>
+        <td style="font-weight:bold;background:#E4EFEC;width:19%">${escapeHtml(s.label)}</td>
+        <td>${sit}</td>
+        <td>${reco}</td>
+      </tr>`;
+    }).join('');
+    const intrantsRowsHtml = intrantsRows.length
+      ? intrantsRows.map(r => `<tr>${[0,1,2,3,4].map(i => `<td>${escapeHtml(r[i]||'')}</td>`).join('')}</tr>`).join('')
+      : `<tr><td colspan="5">RAS</td></tr>`;
+    return `<html><head><meta charset="utf-8"><style>
+      body{ font-family:Calibri,Arial,sans-serif; font-size:11pt; }
+      h1{ font-size:16pt; margin-bottom:2px; }
+      h2{ font-size:12pt; margin-top:22px; }
+      table{ border-collapse:collapse; width:100%; margin-top:8px; }
+      td, th{ border:1px solid #444; padding:6px 8px; vertical-align:top; font-size:10.5pt; }
+      th{ background:#155C4F; color:#fff; }
+    </style></head><body>
+      <h1>ECHOS Hebdomadaire — ${wi.label}</h1>
+      <p>Zone Sanitaire DAA — Centre de Surveillance Épidémiologique</p>
+      <table>
+        <tr><th>Domaines / secteurs</th><th>Situations / évènements</th><th>Approches de solutions / Recommandations actuelles</th></tr>
+        ${rowsForWord}
+      </table>
+      <h2>${escapeHtml(intrantsSection.label)}</h2>
+      <table>
+        <tr><th>Produit</th><th>Stock de sécurité</th><th>Stock disponible</th><th>Taux de disponibilité</th><th>Appréciation</th></tr>
+        ${intrantsRowsHtml}
+      </table>
+    </body></html>`;
+  }
+
+  document.getElementById('btnSendWord').addEventListener('click', () => {
+    requireAdminCode(async () => {
+      const btn = document.getElementById('btnSendWord');
+      const original = btn.textContent;
+      btn.textContent = 'Génération du fichier…';
+      btn.disabled = true;
+      try{
+        await ensureHtmlDocx();
+        const blob = htmlDocx.asBlob(buildWordHtml());
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ECHOS_${wi.label.split(' ')[0]}_${STATE.year}.docx`;
+        a.click();
+      }catch(e){
+        alert("Impossible de générer le fichier Word (connexion internet requise pour charger l'outil de conversion).");
+      } finally {
+        btn.textContent = original;
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+/* =========================================================
+   ADMIN TAB — calendrier épidémiologique
+========================================================= */
+async function renderAdminTab(content){
+  const unlocked = adminUnlocked || sessionStorage.getItem('echos_admin_unlocked') === '1';
+  if (!unlocked){
+    content.innerHTML = `
+      <div class="panel" style="max-width:420px">
+        <h3 style="margin-top:0">Accès administrateur</h3>
+        <p class="hint">Cette section est réservée à l'administrateur du calendrier épidémiologique.</p>
+        <form id="adminLockForm">
+          <div class="field">
+            <label class="f-label">Code d'accès</label>
+            <input type="text" id="a_code" autocomplete="off" required>
+          </div>
+          <button type="submit" class="btn">Déverrouiller</button>
+          <p class="muted" id="lockError" style="display:none;color:var(--red);margin-top:10px">Code incorrect.</p>
+        </form>
+      </div>
+    `;
+    document.getElementById('adminLockForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = document.getElementById('a_code').value.trim();
+      if (val === ADMIN_CODE){
+        adminUnlocked = true;
+        sessionStorage.setItem('echos_admin_unlocked', '1');
+        renderAdminTab(content);
+      } else {
+        document.getElementById('lockError').style.display = 'block';
+      }
+    });
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin-top:0">Calendrier de surveillance hebdomadaire</h3>
+        <button class="btn secondary small" id="a_lock">Verrouiller</button>
+      </div>
+      <p class="hint">Ajoutez le calendrier d'une nouvelle année pour permettre la sélection des semaines épidémiologiques correspondantes.
+      Il suffit d'indiquer la date de début de la semaine 1 : les semaines suivantes sont calculées automatiquement (7 jours chacune).</p>
+      <div class="admin-grid">
+        <div class="field">
+          <label class="f-label">Année</label>
+          <input type="number" id="a_year" placeholder="2027" min="2020" max="2100">
+        </div>
+        <div class="field">
+          <label class="f-label">Date de début de la semaine 1 (lundi)</label>
+          <input type="date" id="a_start">
+        </div>
+        <div class="field">
+          <label class="f-label">Nombre de semaines</label>
+          <input type="number" id="a_weeks" value="52" min="1" max="53">
+        </div>
+      </div>
+      <button class="btn" id="a_save">Enregistrer ce calendrier</button>
+      <div class="toast" id="adminToast"></div>
+
+      <table class="years" id="yearsTable">
+        <thead><tr><th>Année</th><th>Début S1</th><th>Nb. semaines</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  `;
+  fillYearsTable();
+  document.getElementById('a_lock').addEventListener('click', () => {
+    adminUnlocked = false;
+    sessionStorage.removeItem('echos_admin_unlocked');
+    renderAdminTab(content);
+  });
+
+  document.getElementById('a_save').addEventListener('click', async () => {
+    const year = parseInt(document.getElementById('a_year').value, 10);
+    const start = document.getElementById('a_start').value;
+    const weeks = parseInt(document.getElementById('a_weeks').value, 10) || 52;
+    if (!year || !start){
+      alert('Veuillez renseigner au minimum l\'année et la date de début de la semaine 1.');
+      return;
+    }
+    const cal = { year, startDate: start, weeks };
+    await safeSet('calendar:' + year, JSON.stringify(cal), true);
+    STATE.calendars = await loadCalendars();
+    populateYearSelect();
+    if (String(STATE.year) === String(year)) populateWeekSelect();
+    const toast = document.getElementById('adminToast');
+    toast.textContent = `✓ Calendrier ${year} enregistré (${weeks} semaines à partir du ${start}).`;
+    toast.classList.add('show');
+    fillYearsTable();
+  });
+}
+
+function fillYearsTable(){
+  const tbody = document.querySelector('#yearsTable tbody');
+  const years = Object.keys(STATE.calendars).sort();
+  tbody.innerHTML = years.map(y => {
+    const c = STATE.calendars[y];
+    return `<tr>
+      <td>${c.year}</td><td>${c.startDate}</td><td>${c.weeks}</td>
+      <td><button class="btn secondary small" data-edit="${y}">Modifier</button></td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = STATE.calendars[btn.dataset.edit];
+      document.getElementById('a_year').value = c.year;
+      document.getElementById('a_start').value = c.startDate;
+      document.getElementById('a_weeks').value = c.weeks;
+    });
+  });
+}
+
+/* =========================================================
+   BOOTSTRAP
+========================================================= */
+async function init(){
+  STATE.calendars = await loadCalendars();
+  const years = Object.keys(STATE.calendars).sort();
+  const thisYear = String(new Date().getFullYear());
+  STATE.year = STATE.calendars[thisYear] ? thisYear : years[0];
+  STATE.week = currentWeekGuess(STATE.calendars[STATE.year]);
+
+  populateYearSelect();
+  populateWeekSelect();
+
+  document.getElementById('yearSelect').addEventListener('change', (e) => {
+    STATE.year = e.target.value;
+    STATE.week = currentWeekGuess(STATE.calendars[STATE.year]);
+    populateWeekSelect();
+    render();
+  });
+  document.getElementById('weekSelect').addEventListener('change', (e) => {
+    STATE.week = parseInt(e.target.value, 10);
+    updateWeekRangeLabel();
+    render();
+  });
+  document.querySelectorAll('nav.tabs button').forEach(b => {
+    b.addEventListener('click', () => setTab(b.dataset.tab));
+  });
+
+  render();
+}
+
+/* =========================================================
+   SETUP SCREEN (Firebase config) — only shown when the six
+   placeholders above haven't been replaced yet.
+========================================================= */
+function showSetupScreen(){
+  document.getElementById('setupScreen').style.display = 'block';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('setupForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cfg = {
+      apiKey: document.getElementById('cfg_apiKey').value.trim(),
+      authDomain: document.getElementById('cfg_authDomain').value.trim(),
+      projectId: document.getElementById('cfg_projectId').value.trim(),
+      storageBucket: document.getElementById('cfg_storageBucket').value.trim(),
+      messagingSenderId: document.getElementById('cfg_messagingSenderId').value.trim(),
+      appId: document.getElementById('cfg_appId').value.trim(),
+    };
+    const adminCode = document.getElementById('cfg_adminCode').value.trim();
+
+    // 1) Build a ready-to-deploy copy of this file with the config baked in.
+    let configured = ORIGINAL_HTML
+      .replace('__FIREBASE_API_KEY__', cfg.apiKey)
+      .replace('__FIREBASE_AUTH_DOMAIN__', cfg.authDomain)
+      .replace('__FIREBASE_PROJECT_ID__', cfg.projectId)
+      .replace('__FIREBASE_STORAGE_BUCKET__', cfg.storageBucket)
+      .replace('__FIREBASE_SENDER_ID__', cfg.messagingSenderId)
+      .replace('__FIREBASE_APP_ID__', cfg.appId)
+      .replace('__ADMIN_CODE__', adminCode);
+    const blob = new Blob([configured], { type:'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'index.html';
+    a.click();
+
+    // 2) Also start the app immediately in this browser so you can test right away.
+    ADMIN_CODE = adminCode;
+    startFirebase(cfg);
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    init();
+  });
+}
+
+/* =========================================================
+   PWA — service worker + bouton « Installer l'application »
+========================================================= */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e)));
+}
+(function setupInstall(){
+  const btn = document.getElementById('btnInstall');
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (!btn || isStandalone) return;
+  const installIcon = '<svg class="ico" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>';
+  let deferred = null;
+  btn.innerHTML = installIcon + 'Installer';
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; btn.classList.add('show'); });
+  window.addEventListener('appinstalled', () => { btn.classList.remove('show'); deferred = null; });
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (isIOS) btn.classList.add('show');
+  btn.addEventListener('click', async () => {
+    if (deferred){ deferred.prompt(); await deferred.userChoice; deferred = null; btn.classList.remove('show'); }
+    else if (isIOS){ alert("Sur iPhone/iPad : touchez le bouton Partager (carré avec flèche) dans Safari, puis « Sur l'écran d'accueil »."); }
+  });
+})();
+
+try{
+  if (isConfigured(firebaseConfig)){
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    startFirebase(firebaseConfig);
+    init();
+  } else {
+    showSetupScreen();
+  }
+}catch(e){
+  console.error(e);
+  document.body.innerHTML = `<div style="max-width:600px;margin:60px auto;font-family:sans-serif;padding:20px;border:2px solid #B23A2E;border-radius:10px;background:#F7E7E4;color:#12312B">
+    <h2 style="margin-top:0">Une erreur a empêché l'affichage</h2>
+    <p>Détail technique : ${escapeHtml(e.message || String(e))}</p>
+    <p>Vérifiez votre connexion internet (Firebase a besoin du réseau) et rechargez la page. Si le problème persiste, renvoyez ce message à l'administrateur.</p>
+  </div>`;
+}
+</script></body></html>
